@@ -1,2 +1,8 @@
 # video data
-*.mp4
+dataset/
+
+# csv data
+csv/
+
+# pycache
+__pycache__

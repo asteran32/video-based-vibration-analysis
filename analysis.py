@@ -10,17 +10,17 @@ from matplotlib import pyplot as plt
 FPS  = 30
 
 class video_analysis(object):
+    
     def __init__(self, path):
         self.data_path = path
-        self.cap = ""
-        self.roi = ""
-        self.dir = "./data"
+        self.roi = [920, 720, 25, 25]
+        self.dir = "./csv"
 
-        self.setROI()
+        # self.setROI()
 
     def setROI(self):
-        self.cap = cv2.VideoCapture(self.data_path)
-        ret, img = self.cap.read()
+        cap = cv2.VideoCapture(self.data_path)
+        ret, img = cap.read()
         if ret is False:
             return
 
@@ -42,14 +42,15 @@ class video_analysis(object):
         # Make diretory if not exist
         if not os.path.exists(self.dir):
             os.mkdir(self.dir)
-        print("---- Write csv file ----")
-        csv_path = os.path.join(self.dir, self.data_path.split('.')[0]+'.csv')
-        f = open(csv_path, 'w', encoding='utf-8')
+
+        csv_path = os.path.join(self.dir, self.data_path.split('/')[1].split('.')[0]+'.csv')
+        if not os.path.exists(csv_path):
+            f = open(csv_path, 'w')
+
+        f = open(csv_path, 'a', encoding='utf-8')
         w = csv.writer(f)
-        for i in data:
-            w.writerow(i)
+        w.writerow(data)
         f.close()
-            
 
     def opticalflow_dense(self):
         x, y, w, h = self.roi[0], self.roi[1], self.roi[2], self.roi[3]
@@ -65,7 +66,9 @@ class video_analysis(object):
         plt.grid(True)
 
         # First frame
-        _, frame = self.cap.read()
+        cap = cv2.VideoCapture(self.data_path)
+
+        _, frame = cap.read()
         crop = frame[y:y+h, x:x+w]
         gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
 
@@ -75,11 +78,9 @@ class video_analysis(object):
         # Sets image saturation to maximum
         mask[..., 1] = 255
 
-        fft_data = []
-
-        first_frame = True
-        while True:
-            ret, frame = self.cap.read()
+        frame_cnt = 0
+        while frame_cnt < 10000:
+            ret, frame = cap.read()
             if ret is False:
                 print('End of videocapture')
                 break
@@ -94,10 +95,10 @@ class video_analysis(object):
             flow = cv2.calcOpticalFlowFarneback(prev_gray, gray, 
                                         None,
                                         0.5, 3, 15, 3, 5, 1.2, 0)
-
+            # flow shape (25,25,2)
             # Computes the magnitude and angle of the 2D vectors
             magnitude, angle = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-
+            
             # Sets image hue according to the optical flow direction
             mask[..., 0] = angle * 180 / np.pi / 2
             
@@ -113,13 +114,14 @@ class video_analysis(object):
 
             # FFT
             xf, yf = self.fourier_transform(magnitude)
+            
+            # Save CSV data
+            self.save_csv(magnitude.reshape(-1))
+            # self.save_csv(yf)
 
-            print(xf.shape)            
-            fft_data.append(xf)
-
-            if first_frame is True:
+            if frame_cnt == 0:
                 line, = ax.plot(xf, yf)
-                first_frame = False
+                frame_cnt += 1
                 continue
 
             line.set_xdata(xf)
@@ -127,19 +129,18 @@ class video_analysis(object):
 
             figure.canvas.draw()
             figure.canvas.flush_events()
-
+            
             cv2.rectangle(frame, (x,y),(x+w, y+h), (255,0,0), 2)
             cv2.imshow('dense optical flow', rgb)
             cv2.imshow('vibration analysis based video', frame)
             if cv2.waitKey(1) & 0xFF == 27: 
-                # self.save_csv(fft_data)
                 break
+            
+            frame_cnt += 1
 
-        self.cap.release()
+        cap.release()
         cv2.destroyAllWindows()
 
-        # Save data
-        # self.save_csv(fft_data)
         
 
 # reference 
